@@ -4,12 +4,12 @@
 
 #ifndef TOMORI_LANG_CPP_PARSER_H
 #define TOMORI_LANG_CPP_PARSER_H
-#include <vector>
+#include "Define.h"
 #include "AST.h"
 
 class Parser {
 public:
-    Parser(const std::vector<Token> &tokens, bool dbg_mode = false): tokens(std::move(tokens)), current(0), _dbg_mode(dbg_mode) {};
+    Parser(const std::vector<Token> &tokens, bool dbg_mode = false): tokens(tokens), current(0), _dbg_mode(dbg_mode) {};
     ~Parser();
     Expression *parse_expression();
     Statement *parse_statement();
@@ -33,6 +33,8 @@ private:
     Expression *power_expr();    // **
     Expression *unary_expr();    // negative, not
     Expression *primary_expr();
+    Expression *call_expr();     // func + (
+    Expression *finish_call_expr(Expression *call_to);
 
     // Parse Statements
     std::vector<Statement *> parsed_statements;
@@ -43,7 +45,7 @@ private:
     Statement *if_st();
     Statement *loop_st();
     Statement *expr_st();
-    std::vector<Statement*> block(TokenType terminator);
+    std::vector<Statement*> block(std::initializer_list<TokenType> terminators);
 
     Token advance();
     Token peek();     // current token

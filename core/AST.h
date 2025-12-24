@@ -11,8 +11,12 @@
 #include <iostream>
 
 // ==================== Expression Nodes ====================
+enum class ExpressionType {
 
-struct Expression {
+};
+
+class Expression {
+public:
     virtual ~Expression() = default;
     virtual void print(int indent = 0) const = 0;
 
@@ -22,9 +26,11 @@ protected:
     }
 };
 
-struct LiteralExpression : public Expression {
+class LiteralExpression : public Expression {
+public:
     Token value;
-    LiteralExpression(Token value) : value(value) {}
+
+    explicit LiteralExpression(Token value) : value(value) {}
 
     void print(int indent = 0) const override {
         pad(indent);
@@ -32,9 +38,11 @@ struct LiteralExpression : public Expression {
     }
 };
 
-struct VariableExpression : public Expression {
+class VariableExpression : public Expression {
+public:
     Token name;
-    VariableExpression(Token name) : name(name) {}
+
+    explicit VariableExpression(Token name) : name(name) {}
 
     void print(int indent = 0) const override {
         pad(indent);
@@ -42,10 +50,13 @@ struct VariableExpression : public Expression {
     }
 };
 
-struct UnaryExpression : public Expression {
+class UnaryExpression : public Expression {
+public:
     Token op;
     Expression* right;
-    UnaryExpression(Token op, Expression* right) : op(op), right(right) {}
+
+    UnaryExpression(Token op, Expression* right)
+        : op(op), right(right) {}
 
     void print(int indent = 0) const override {
         pad(indent);
@@ -54,10 +65,12 @@ struct UnaryExpression : public Expression {
     }
 };
 
-struct BinaryExpression : public Expression {
+class BinaryExpression : public Expression {
+public:
     Token op;
     Expression* left;
     Expression* right;
+
     BinaryExpression(Expression* left, Token op, Expression* right)
         : op(op), left(left), right(right) {}
 
@@ -69,10 +82,14 @@ struct BinaryExpression : public Expression {
     }
 };
 
-struct AssignExpression : public Expression {
+class AssignExpression : public Expression {
+public:
     Token name;
     Expression* value;
-    AssignExpression(Token name, Expression* value) : name(name), value(value) {}
+
+    AssignExpression(Token name, Expression* value)
+        : name(name), value(value) {}
+
     void print(int indent = 0) const override {
         pad(indent);
         std::cout << "AssignExpression(" << name.token << ")\n";
@@ -80,9 +97,12 @@ struct AssignExpression : public Expression {
     }
 };
 
-struct GroupingExpression : public Expression {
+class GroupingExpression : public Expression {
+public:
     Expression* expression;
-    GroupingExpression(Expression* expression) : expression(expression) {}
+
+    explicit GroupingExpression(Expression* expression)
+        : expression(expression) {}
 
     void print(int indent = 0) const override {
         pad(indent);
@@ -91,9 +111,27 @@ struct GroupingExpression : public Expression {
     }
 };
 
+class CallExpression : public Expression {
+public:
+    Expression *call_to;
+    std::vector<Expression*> args;
+    explicit CallExpression(Expression* ct, std::vector<Expression*> ag): call_to(ct), args(ag) {}
+    void print(int indent = 0) const override {
+        pad(indent);
+        std::cout<<"CallExpression"<<std::endl;
+        call_to->print(indent + 2);
+        pad(indent + 2);
+        std::cout<<"Arguments:"<<std::endl;
+        for (auto ag: args) {
+            ag->print(indent + 4);
+        }
+    }
+};
+
 // ==================== Statement Nodes ====================
 
-struct Statement {
+class Statement {
+public:
     virtual ~Statement() = default;
     virtual void print(int indent = 0) const = 0;
 
@@ -103,9 +141,12 @@ protected:
     }
 };
 
-struct ExpressionStatement : public Statement {
+class ExpressionStatement : public Statement {
+public:
     Expression* expression;
-    ExpressionStatement(Expression* expression) : expression(expression) {}
+
+    explicit ExpressionStatement(Expression* expression)
+        : expression(expression) {}
 
     void print(int indent = 0) const override {
         pad(indent);
@@ -114,9 +155,11 @@ struct ExpressionStatement : public Statement {
     }
 };
 
-struct VariableStatement : public Statement {
+class VariableStatement : public Statement {
+public:
     Token name;
     Expression* initializer;
+
     VariableStatement(Token name, Expression* initializer)
         : name(name), initializer(initializer) {}
 
@@ -127,9 +170,12 @@ struct VariableStatement : public Statement {
     }
 };
 
-struct ReturnStatement : public Statement {
+class ReturnStatement : public Statement {
+public:
     Expression* value;
-    ReturnStatement(Expression* expression) : value(expression) {}
+
+    explicit ReturnStatement(Expression* expression)
+        : value(expression) {}
 
     void print(int indent = 0) const override {
         pad(indent);
@@ -138,21 +184,24 @@ struct ReturnStatement : public Statement {
     }
 };
 
-struct BreakStatement : public Statement {
+class BreakStatement : public Statement {
+public:
     void print(int indent = 0) const override {
         pad(indent);
         std::cout << "BreakStatement\n";
     }
 };
 
-struct ContinueStatement : public Statement {
+class ContinueStatement : public Statement {
+public:
     void print(int indent = 0) const override {
         pad(indent);
         std::cout << "ContinueStatement\n";
     }
 };
 
-struct IfStatement : public Statement {
+class IfStatement : public Statement {
+public:
     Expression* condition;
     std::vector<Statement*> then_branches;
     std::vector<std::pair<Expression*, std::vector<Statement*>>> elseif_branches;
@@ -202,7 +251,8 @@ struct IfStatement : public Statement {
     }
 };
 
-struct LoopStatement : public Statement {
+class LoopStatement : public Statement {
+public:
     Expression* condition;
     std::vector<Statement*> loop_body;
 
@@ -225,19 +275,34 @@ struct LoopStatement : public Statement {
     }
 };
 
-struct FunctionStatement : public Statement {
+class FunctionStatement : public Statement {
+public:
     Token name;
     std::vector<Token> parameters;
     std::vector<Statement*> body;
-    FunctionStatement(Token name, std::vector<Token> parameters, std::vector<Statement*> body): name(name), parameters(parameters), body(std::move(body)) {}
+
+    FunctionStatement(
+        Token name,
+        std::vector<Token> parameters,
+        std::vector<Statement*> body
+    )
+        : name(name),
+          parameters(std::move(parameters)),
+          body(std::move(body)) {}
+
     void print(int indent = 0) const override {
         pad(indent);
         std::cout << "FunctionStatement\n";
+
+        pad(indent + 2);
+        std::cout<<"Name: \n";
+        std::cout<<"\t"<< name.token << "\n";
         pad(indent + 2);
         std::cout << "Parameters:\n";
-        for (auto parameter : parameters) {
+        for (const auto& parameter : parameters) {
             std::cout << "\t" << parameter.token << "\n";
         }
+
         pad(indent + 2);
         std::cout << "Body:\n";
         for (auto* stmt : body) {

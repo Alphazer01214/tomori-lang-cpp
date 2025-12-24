@@ -11,7 +11,7 @@ Parser::~Parser() = default;
     2. **
     3. * /
     4. + -
-    5. < > is
+    5. < > is isnot
     6. not
     7. and
     8. or
@@ -36,6 +36,7 @@ Statement *Parser::st() {
         return loop_st();
     }
     if (match(TokenType::Function)) {
+        // 函数定义阶段
         return func_st();
     }
     if (match(TokenType::Return)) {
@@ -99,33 +100,69 @@ Statement *Parser::if_st() {
 }
 
 Statement *Parser::loop_st() {
-    // loop then ... end
-    // loop (exp) then ... end
-    Expression *condition = expr();
+    Expression *condition = nullptr;
     std::vector<Statement *> loop_block;
-    consume(TokenType::Then, "Expect 'then' after 'loop'.");
+
+    // loop then
+    if (check(TokenType::Then)) {
+        advance(); // consume then
+    } else {
+        // loop cond then
+        condition = expr();
+        consume(TokenType::Then, "Expect 'then' after loop condition.");
+    }
+
     while (current_type() != TokenType::End && !is_end()) {
         loop_block.emplace_back(st());
     }
+
     consume(TokenType::End, "Loop block not closed with 'end'.");
     return new LoopStatement(condition, loop_block);
 }
 
+
 Statement *Parser::func_st() {
-    return nullptr;
+    Token name = consume(TokenType::Identifier, "Expect a function name.");
+    std::vector<Token> params;
+    std::vector<Statement *> func_block;
+
+    // have params
+    if (current_type() == TokenType::Have) {
+        advance();
+        while (current_type() != TokenType::Then && !is_end()) {
+            params.push_back(advance());
+        }
+    }
+    // then block
+    consume(TokenType::Then, "Expect 'then' after function.");
+
+    while (current_type() != TokenType::End && !is_end()) {
+        func_block.emplace_back(st());
+    }
+    consume(TokenType::End, "Function block not closed with 'end'.");
+    return new FunctionStatement(name, params, func_block);
 }
 
-Statement *Parser::return_st() {
-    return new ReturnStatement(expr());
+Statement* Parser::return_st() {
+    Expression* value = nullptr;
+    if (!check(TokenType::End) && !check(TokenType::Then) && !check(TokenType::Eof)) {
+        value = expr();  // 解析返回值
+    }
+    return new ReturnStatement(value);
 }
+
 
 Statement *Parser::expr_st() {
     return new ExpressionStatement(expr());
 }
 
-// std::vector<Statement *> Parser::block(TokenType terminator) {
+// std::vector<Statement*> Parser::block(std::initializer_list<TokenType> terminators) {
 //     std::vector<Statement*> res;
-//     while (current_type() != TokenType::Eof && current_type() != terminator) {
+//     while (!is_end()) {
+//         for (auto t : terminators) {
+//             if (current_type() == t)
+//                 return res;
+//         }
 //         res.emplace_back(st());
 //     }
 //     return res;
@@ -203,7 +240,7 @@ Expression *Parser::not_expr() {
 
 Expression *Parser::comp_expr() {
     Expression *res = term_expr();
-    while (match(TokenType::Greater) || match(TokenType::GreaterEqual) || match(TokenType::Less) || match(TokenType::LessEqual) || match(TokenType::Is)) {
+    while (match(TokenType::Greater) || match(TokenType::GreaterEqual) || match(TokenType::Less) || match(TokenType::LessEqual) || match(TokenType::Is) || match(TokenType::IsNot)) {
         Token op = previous();
         Expression *right = term_expr();
         res = new BinaryExpression(res, op, right);
@@ -249,7 +286,17 @@ Expression *Parser::unary_expr() {
         Expression *right = unary_expr();
         return new UnaryExpression(op, right);
     }
-    return primary_expr();
+    return call_expr();
+}
+
+
+Expression *Parser::call_expr() {
+    Expression *res = primary_expr();
+    if (match(TokenType::LeftParen)) {
+        // 匹配到(，开始函数解析
+        res = finish_call_expr(res);
+    }
+    return res;
 }
 
 Expression *Parser::primary_expr() {
@@ -270,6 +317,18 @@ Expression *Parser::primary_expr() {
     }
     message("End of expression at " + reverse_keywords[current_type()] + ".");
     return nullptr;
+}
+
+Expression *Parser::finish_call_expr(Expression *call_to) {
+    std::vector<Expression*> args;
+    if (!check(TokenType::RightParen)) {
+        // left ... right 中间有别的东西，说明有args: func(a, b, c, ...)
+        do {
+            args.push_back(expr());    // 解析
+        }while (match(TokenType::Comma));
+    }
+    consume(TokenType::RightParen, "Expect ')' after function call.");
+    return new CallExpression(call_to, args);
 }
 
 bool Parser::match(TokenType type) {

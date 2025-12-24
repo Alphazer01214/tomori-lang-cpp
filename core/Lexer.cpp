@@ -96,7 +96,9 @@ void Lexer::scan() {
         case ';' :
             add_token(TokenType::Semicolon);
             break;
-
+        case ',':
+            add_token(TokenType::Comma);
+            break;
             // 字符串
         case '\'':
         case '\"':

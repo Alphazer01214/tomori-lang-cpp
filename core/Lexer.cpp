@@ -4,11 +4,25 @@
 
 #include "Lexer.h"
 
-Lexer::Lexer(const std::string &src, bool dbg_mode): start(0), current(0), line(1), src(src), _dbg_mode(dbg_mode) {
-
-}
-
 Lexer::~Lexer() = default;
+
+std::vector<Token> Lexer::tokenize(const std::string &src, bool notify, bool need_dbg) {
+    start = 0;
+    current = 0;
+    _src = src;
+    _notify_error = notify;
+    tokens.clear();
+    _dbg_mode = need_dbg;
+    while (!is_end()) {
+        start = current;
+        scan();
+    }
+    tokens.push_back({TokenType::Eof, "", line});
+    if (_dbg_mode) {
+        _dbg_print_tokens();
+    }
+    return tokens;
+}
 
 std::vector<Token> Lexer::tokenize() {
     while (!is_end()) {
@@ -30,6 +44,7 @@ void Lexer::scan() {
         case '\r':
             break;
         case '\n':
+            // add_token(TokenType::Semicolon);   // 换行作为 statement 终止标志，地位同;
             line++;
             break;
         case '/':
@@ -117,29 +132,29 @@ void Lexer::scan() {
 }
 
 char Lexer::advance() {
-    return src[current++];
+    return _src[current++];
 }
 
 char Lexer::peek() const {
     if (is_end()) {
         return '\0';
     }
-    return src[current];
+    return _src[current];
 }
 
 char Lexer::next_peek() {
-    if (current + 1 >= src.length()) {
+    if (current + 1 >= _src.length()) {
         return '\0';
     }
-    return src[current+1];
+    return _src[current+1];
 }
 
 bool Lexer::is_end() const {
-    return current >= src.length();
+    return current >= _src.length();
 }
 
 void Lexer::add_token(const TokenType type) {
-    const std::string token = src.substr(start, current - start);
+    const std::string token = _src.substr(start, current - start);
     tokens.push_back({type, token, line});
 }
 
@@ -148,7 +163,7 @@ void Lexer::identifier() {
         advance();
     }
 
-    const std::string token = src.substr(start, current - start);
+    const std::string token = _src.substr(start, current - start);
 
     auto it = keywords.find(token);
     if (it != keywords.end()) {
@@ -163,6 +178,9 @@ void Lexer::string(const char quote) {
         if (peek() == '\n') {
             line++;
         }
+        if (peek() == '\\') {
+            advance();
+        }
         advance();
     }
     if (is_end()) {
@@ -170,7 +188,7 @@ void Lexer::string(const char quote) {
         return;
     }
     advance();    // 跳过' "
-    const std::string token = src.substr(start+1, current - start - 2);
+    const std::string token = _src.substr(start+1, current - start - 2);
     tokens.push_back({TokenType::String, token, line});
 }
 
@@ -190,14 +208,14 @@ void Lexer::number() {
 
 bool Lexer::match(char expected) {
     if (is_end()) return false;
-    if (src[current] != expected) return false;
+    if (_src[current] != expected) return false;
     current++;    // 注意吃字符
     return true;
 }
 
-
-void Lexer::error(const std::string &msg) const {
-    std::cerr<<"[Lexer Error] line "<<line<<" message: "<<msg<<std::endl;
+void Lexer::error(const std::string &msg) {
+    if (_notify_error)
+        std::cerr<<"[Syntax Error] line "<<line<<" message: "<<msg<<std::endl;
 }
 
 void Lexer::_dbg_print_tokens() const {

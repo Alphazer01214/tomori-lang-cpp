@@ -8,13 +8,15 @@
 
 class Lexer {
 public:
-    Lexer(const std::string &src, bool dbg_mode = false);
+    Lexer(bool dbg_mode = false): _dbg_mode(dbg_mode), start(0), current(0), line(1), _notify_error(false) {};
     ~Lexer();
 
     std::vector<Token> tokenize();
+    std::vector<Token> tokenize(const std::string &src, bool notify = true, bool need_dbg = false);
 private:
-    const std::string &src;
+    std::string _src;
     std::vector<Token> tokens;
+    bool _notify_error;
     int start;     // 0
     int current;
     int line;      // 1
@@ -36,7 +38,8 @@ private:
     bool match(char expected);
     bool is_end() const;
     void add_token(TokenType type);
-    void error(const std::string &msg) const;
+    void error(const std::string &msg);
+    void terminate();
 
     void _dbg_print_tokens() const;
 

@@ -15,6 +15,8 @@
 #include <cctype>
 #include <iomanip>
 #include <stdexcept>
+#include <cmath>
+#include <algorithm>
 
 // Lexer / Parser
 enum class TokenType {
@@ -130,7 +132,18 @@ static std::unordered_map<TokenType, std::string> reverse_keywords = {
     {TokenType::Eof, "Eof"}
 };
 
-// Environment / Interpreter
+// enum class ControlSignal {
+//     None,
+//     Break,
+//     Continue,
+//     Return
+// };
+//
+// enum class ErrorSignal {
+//     None,
+//     RuntimeError,
+//     CompileError
+// };
 
 
 #endif //TOMORI_LANG_CPP_DEFINE_H

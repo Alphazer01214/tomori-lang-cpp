@@ -7,18 +7,21 @@
 #include "Define.h"
 #include "AST.h"
 
+
 class Parser {
 public:
-    Parser(const std::vector<Token> &tokens, bool dbg_mode = false): tokens(tokens), current(0), _dbg_mode(dbg_mode) {};
+    Parser(const std::vector<Token> &tokens, bool dbg_mode = false): tokens(tokens), current(0), _dbg_mode(dbg_mode), _error(false) {};
     ~Parser();
     Expression *parse_expression();
     Statement *parse_statement();
     std::vector<Statement*> parse();
+    std::vector<Statement *> parse(const std::vector<Token> &_tokens);
 
 private:
     std::vector<Token> tokens;
     int current;
     bool _dbg_mode;
+    bool _error;
 
     // Parse Expression
     Expression *parsed_expressions;
@@ -51,11 +54,13 @@ private:
     Token peek();     // current token
     Token previous(); // previous token
     TokenType current_type();
+    void synchronize();
     bool match(TokenType type);
     bool check(TokenType type);
     Token consume(TokenType type, const std::string &msg);
     bool is_end() const;
-    static void error(const std::string &msg);
+    void clear();
+    void error(const std::string &msg);
     static void message(const std::string &msg);
 };
 

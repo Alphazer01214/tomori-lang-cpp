@@ -4,10 +4,20 @@
 
 #include "Interpreter.h"
 
-#include <functional>
+void Interpreter::init_builtins() {
+    current_env->define("gugugaga", new FunctionValue(&builtin_print));
+    current_env->define("sort", new FunctionValue(&builtin_sort));
+}
 
+void Interpreter::interpret(const std::vector<Statement *>& statements) {
+    for (auto stmt : statements) {
+        execute_statement(stmt);
+    }
+}
 
 Value *Interpreter::execute_statements(const std::vector<Statement *> &statements, Environment *env) {
+    // 在 env 环境中执行这些statements
+    // function, if, loop
     // 需要处理多个statement，说明进入新环境
     Environment *prev_env = current_env;
     current_env = env;
@@ -22,13 +32,14 @@ Value *Interpreter::execute_statements(const std::vector<Statement *> &statement
     }
     // 复原现场
     current_env = prev_env;
-
     return nullptr;    // 没有return
 }
 
 Value *Interpreter::execute_statement(Statement *st) {
     if (auto *ret_st = dynamic_cast<ReturnStatement *>(st)) {
-        return execute_expression(ret_st->value);
+        Value *val = execute_expression(ret_st->value);
+        // std::cout<<val->to_string()<<std::endl;
+        return val;
     }
     if (auto *fn_st = dynamic_cast<FunctionStatement *>(st)) {
         define_function(fn_st);
@@ -36,18 +47,24 @@ Value *Interpreter::execute_statement(Statement *st) {
         return nullptr;
     }
     if (auto *var_st = dynamic_cast<VariableStatement *>(st)) {
-        define_variable(var_st);
-        return nullptr;
+        return define_variable(var_st);
     }
     if (auto *exp_st = dynamic_cast<ExpressionStatement *>(st)) {
-        execute_expression(exp_st->expression);
+        Value *val = execute_expression(exp_st->expression);
+        // std::cout<<val->to_string()<<std::endl;
         return nullptr;
     }
     if (auto *if_st = dynamic_cast<IfStatement *>(st)) {
-
+        return life_is_if_and_lie(if_st);
     }
     if (auto *loop_st = dynamic_cast<LoopStatement *>(st)) {
-
+        return handle_loop(loop_st);
+    }
+    if (auto *break_st = dynamic_cast<BreakStatement *>(st)) {
+        return new BreakValue();
+    }
+    if (auto *continue_st = dynamic_cast<ContinueStatement *>(st)) {
+        return new ContinueValue();
     }
     error("Unknown statement.");
     return nullptr;
@@ -67,16 +84,69 @@ Value *Interpreter::execute_expression(Expression *expr) {
     if (auto *lit = dynamic_cast<LiteralExpression *>(expr)) {
         return literal_value(lit);
     }
+    if (auto *ass = dynamic_cast<AssignExpression *>(expr)) {
+        return assign_operation(ass);
+    }
+    if (auto *bin = dynamic_cast<BinaryExpression *>(expr)) {
+        return binary_operation(bin);
+    }
     error("Unknown expression.");
     return nullptr;
 }
 
-void Interpreter::life_is_if_and_lie(IfStatement *st) {
+Value *Interpreter::life_is_if_and_lie(IfStatement *if_st) {
     /*    Expression* condition;
     std::vector<Statement*> then_branches;
     std::vector<std::pair<Expression*, std::vector<Statement*>>> elseif_branches;
     std::vector<Statement*> else_branches;
     */
+    // first condition
+    Value *condition = execute_expression(if_st->condition);
+    if (is_true(condition)) {
+        Environment *if_env = new Environment(current_env);
+        return execute_statements(if_st->then_branches, if_env);
+    }
+    // other conditions: elseif
+    for (const auto& [elseif_condition_expr, elseif_st]: if_st->elseif_branches) {
+        Value *elseif_condition = execute_expression(elseif_condition_expr);
+        if (is_true(elseif_condition)) {
+            Environment *elseif_env = new Environment(current_env);
+            return execute_statements(elseif_st, elseif_env);
+        }
+    }
+    // else
+    if (!if_st->else_branches.empty()) {
+        Environment *else_env = new Environment(current_env);
+        return execute_statements(if_st->else_branches, else_env);
+    }
+    error("Unknown error occurred when executing if statements.");
+    return nullptr;
+}
+
+Value *Interpreter::handle_loop(LoopStatement *loop_st) {
+    /*
+    *Expression* condition;
+    std::vector<Statement*> loop_body;
+    */
+    while (true) {
+        Value *condition = execute_expression(loop_st->condition);
+        if (!is_true(condition)) {
+            break;
+        }
+        Environment *loop_env = new Environment(current_env);
+        Value *ret = execute_statements(loop_st->loop_body, loop_env);
+        if (!ret) {
+            continue;
+        }
+        if (ret->type == ValueType::Break) {
+            return nullptr;
+        }
+        if (ret->type == ValueType::Continue) {
+            continue;
+        }
+        return ret;
+    }
+    return nullptr;
 }
 
 void Interpreter::define_function(FunctionStatement *st) {
@@ -90,21 +160,31 @@ void Interpreter::define_function(FunctionStatement *st) {
     current_env->define(function_name, func);
 }
 
-void Interpreter::define_variable(VariableStatement *var_st) {
+Value *Interpreter::define_variable(VariableStatement *var_st) {
     std::string variable_name = var_st->name.token;
     Value *right = execute_expression(var_st->initializer);
     current_env->define(variable_name, right);
+    return current_env->get_value(variable_name);
 }
 
 Value *Interpreter::function_call(CallExpression *call_expr) {
     // call_expr: *call_to(Identifier aka VariableExpression, have Token name) , args(several expressions)
     // FunctionValue: args: strings, sts: statements, env
-    auto call_to = execute_expression(call_expr);    // -> function_value
+    auto call_to = execute_expression(call_expr->call_to);    // -> function_value
     auto *fn = dynamic_cast<FunctionValue*>(call_to);
     if (!fn) {
         error("Attempt to call non-function");
         return nullptr;
     }
+    std::vector<Value*> args;
+    for (auto e: call_expr->args) {
+        args.emplace_back(execute_expression(e));
+    }
+    // builtin function 用到的函数指针我实在无法理解
+    if (fn->is_builtin) {
+        return fn->fn(this, args);
+    }
+
     int required_args = fn->args.size();
     int current_args = call_expr->args.size();
 
@@ -116,8 +196,8 @@ Value *Interpreter::function_call(CallExpression *call_expr) {
     Environment *call_env = new Environment(fn->env);
     // bind args
     for (int i = 0; i < required_args; i++) {
-        Value *arg = execute_expression(call_expr->args[i]);
-        call_env->define(fn->args[i], arg);
+        // Value *arg = execute_expression(call_expr->args[i]);
+        call_env->define(fn->args[i], args[i]);
     }
 
     // call 之后的结果是value
@@ -266,6 +346,18 @@ Value* Interpreter::add_operation(Expression* left, Expression* right) {
         }
     }
 
+    // int + string
+    if (auto *ls = dynamic_cast<StringValue*>(l)) {
+        if (auto* ri = dynamic_cast<IntegerValue*>(r)) {
+            return new StringValue(ls->value + std::to_string(ri->value));
+        }
+    }
+    if (auto *li = dynamic_cast<IntegerValue*>(l)) {
+        if (auto* rs = dynamic_cast<StringValue*>(r)) {
+            return new StringValue(std::to_string(li->value) + rs->value);
+        }
+    }
+
     error("Invalid operands for +");
     return new MygoValue();
 }
@@ -376,6 +468,59 @@ Value* Interpreter::div_operation(Expression* left, Expression* right) {
     }
 
     error("Invalid operands for /");
+    return new MygoValue();
+}
+
+Value* Interpreter::pow_operation(Expression* left, Expression* right) {
+    Value* l = execute_expression(left);
+    Value* r = execute_expression(right);
+
+    if (auto* li = dynamic_cast<IntegerValue*>(l)) {
+        if (auto* ri = dynamic_cast<IntegerValue*>(r)) {
+            return new IntegerValue(static_cast<int>(std::pow(li->value, ri->value)));
+        }
+        if (auto* rf = dynamic_cast<FloatValue*>(r)) {
+            return new FloatValue(std::pow(li->value, rf->value));
+        }
+    }
+
+    if (auto* lf = dynamic_cast<FloatValue*>(l)) {
+        if (auto* ri = dynamic_cast<IntegerValue*>(r)) {
+            return new FloatValue(std::pow(lf->value, ri->value));
+        }
+        if (auto* rf = dynamic_cast<FloatValue*>(r)) {
+            return new FloatValue(std::pow(lf->value, rf->value));
+        }
+    }
+
+    error("Invalid operands for **");
+    return new MygoValue();
+}
+
+Value* Interpreter::mod_operation(Expression* left, Expression* right) {
+    Value* l = execute_expression(left);
+    Value* r = execute_expression(right);
+
+    if (auto* li = dynamic_cast<IntegerValue*>(l)) {
+        if (auto* ri = dynamic_cast<IntegerValue*>(r)) {
+            if (ri->value == 0) error("Division by zero (mod)");
+            return new IntegerValue(li->value % ri->value);
+        }
+        if (auto* rf = dynamic_cast<FloatValue*>(r)) {
+            return new FloatValue(std::fmod(static_cast<double>(li->value), rf->value));
+        }
+    }
+
+    if (auto* lf = dynamic_cast<FloatValue*>(l)) {
+        if (auto* ri = dynamic_cast<IntegerValue*>(r)) {
+            return new FloatValue(std::fmod(lf->value, static_cast<double>(ri->value)));
+        }
+        if (auto* rf = dynamic_cast<FloatValue*>(r)) {
+            return new FloatValue(std::fmod(lf->value, rf->value));
+        }
+    }
+
+    error("Invalid operands for mod");
     return new MygoValue();
 }
 
@@ -571,6 +716,7 @@ bool Interpreter::is_true(Value *v) {
 
 void Interpreter::error(const std::string &msg) {
     std::cerr<<"[Runtime Error] "<<msg<<std::endl;
+    // current_env->clear();
 }
 void Interpreter::warning(const std::string &msg) {
     std::cerr<<"[Warning] "<<msg<<std::endl;

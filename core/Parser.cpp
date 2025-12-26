@@ -25,37 +25,67 @@ std::vector<Statement *> Parser::parse() {
     return res;
 }
 
-Statement *Parser::st() {
-    if (match(TokenType::Var)) {
-        return var_st();
+std::vector<Statement *> Parser::parse(const std::vector<Token> &_tokens) {
+    std::vector<Statement *> res;
+    current = 0;
+    parsed_statements.clear();
+    tokens = _tokens;
+    while (!is_end()) {
+        auto stmt = st();
+        if (stmt) {
+            res.emplace_back(stmt);
+        } else {
+
+        }
     }
-    if (match(TokenType::If)) {
-        return if_st();
-    }
-    if (match(TokenType::Loop)) {
-        return loop_st();
-    }
-    if (match(TokenType::Function)) {
-        // 函数定义阶段
-        return func_st();
-    }
-    if (match(TokenType::Return)) {
-        return return_st();
-    }
-    if (match(TokenType::Break)) {
-        return new BreakStatement();
-    }
-    if (match(TokenType::Continue)) {
-        return new ContinueStatement();
-    }
-    return expr_st();
+    return res;
 }
+
+Statement *Parser::st() {
+    Statement* stmt = nullptr;
+
+    if (match(TokenType::Var)) {
+        stmt = var_st();
+    }
+    else if (match(TokenType::If)) {
+        stmt = if_st();
+    }
+    else if (match(TokenType::Loop)) {
+        stmt = loop_st();
+    }
+    else if (match(TokenType::Function)) {
+        stmt = func_st();
+    }
+    else if (match(TokenType::Return)) {
+        stmt = return_st();
+    }
+    else if (match(TokenType::Break)) {
+        stmt = new BreakStatement();
+    }
+    else if (match(TokenType::Continue)) {
+        stmt = new ContinueStatement();
+    }
+    else {
+        stmt = expr_st();
+    }
+
+    // consume(TokenType::Semicolon, "Expect ';' or '\\n' after statement.");
+    while (match(TokenType::Semicolon)) {
+
+    }
+    return stmt;
+}
+
 
 Statement *Parser::var_st() {
     Token name = consume(TokenType::Identifier, "Expect a variable name.");
     Expression *initializer = nullptr;
     if (match(TokenType::Assign)) {
         initializer = expr();
+    }
+    if (!initializer) {
+        error("Variable expect an initializer.");
+        return nullptr;
     }
     return new VariableStatement(name, initializer);
 }
@@ -315,6 +345,12 @@ Expression *Parser::primary_expr() {
         consume(TokenType::RightParen, "Expect ')' after expression.");
         return new GroupingExpression(res);
     }
+    if (match(TokenType::RightParen)) {
+        error("Mygo ')'");
+    }
+    if (match(TokenType::End)) {
+        error("Mygo 'end'");
+    }
     message("End of expression at " + reverse_keywords[current_type()] + ".");
     return nullptr;
 }
@@ -329,6 +365,19 @@ Expression *Parser::finish_call_expr(Expression *call_to) {
     }
     consume(TokenType::RightParen, "Expect ')' after function call.");
     return new CallExpression(call_to, args);
+}
+
+void Parser::synchronize() {
+    advance();    // skip wrong token
+    while (!is_end()) {
+        if (previous().type == TokenType::Semicolon) {
+            return;
+        }
+        if (current_type() == TokenType::If || current_type() == TokenType::Function || current_type() == TokenType::Loop || current_type() == TokenType::Var || current_type() == TokenType::Return) {
+            return;
+        }
+        advance();
+    }
 }
 
 bool Parser::match(TokenType type) {
@@ -372,8 +421,15 @@ bool Parser::is_end() const {
     return tokens[current].type == TokenType::Eof;
 }
 
+void Parser::clear() {
+    current = 0;
+    tokens.clear();
+    tokens.push_back(Token(TokenType::Eof));
+}
+
 void Parser::error(const std::string &msg) {
     std::cerr<<"[Parser Error] " << msg << std::endl;
+    // clear();
 }
 
 void Parser::message(const std::string &msg) {

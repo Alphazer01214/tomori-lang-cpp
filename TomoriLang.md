@@ -164,6 +164,11 @@ loop x < 3 then
     end
     x = x + 1
 end
+
+loop x < 3 then
+if x is 2 then break end
+if x isnot 1 then continue end
+end
 ```
 
 

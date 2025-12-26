@@ -19,6 +19,8 @@ public:
     void define(std::string name, Value *value);
     void assign(std::string name, Value *value);
     Value *get_value(std::string name);
+    void clear();
+    void reset_value(const std::string& name);
 
 private:
     Environment *parent;      // 指向上一级

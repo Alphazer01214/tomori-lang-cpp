@@ -128,6 +128,10 @@ public:
     }
 };
 
+// class MygoExpression: public Expression {
+//
+// };
+
 // ==================== Statement Nodes ====================
 
 class Statement {

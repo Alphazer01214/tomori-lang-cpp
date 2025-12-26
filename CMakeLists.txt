@@ -16,4 +16,5 @@ add_executable(tomori_lang_cpp main.cpp
         core/Define.h
         core/Value.h
         dbg_console.h
+        core/Builtin.h
 )
